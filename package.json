@@ -1,0 +1,22 @@
+{
+  "name": "spoon",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Spoon - a stateful mock of the eSIM Go Travel API v2.5 (esim-go.com)",
+  "type": "module",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test tests/*.test.js",
+    "test:watch": "node --test --watch tests/*.test.js"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.1.0",
+    "fastify": "^5.6.1",
+    "qrcode": "^1.5.4"
+  }
+}

@@ -1,78 +1,79 @@
 # Spoon — eSIM Go Travel API v2.5 mock
 
-`esim-go.com` API'sinin **v2.5 sürümünün stateful mock'u**. Gerçek bir eSIM
-sağlayıcısı gibi davranır: sipariş alır, eSIM provision eder, bundle atar, veri
-tüketimini simüle eder, bundle'ları süresi dolunca expire eder, atıl eSIM'leri
-siler ve bütün bunlar için webhook (callback) gönderir.
+A **stateful mock of the `esim-go.com` API, version 2.5**. It behaves like a real
+eSIM provider: it takes orders, provisions eSIMs, applies bundles, simulates data
+consumption, expires bundles when their window closes, deletes idle eSIMs, and
+fires webhooks (callbacks) for all of it.
 
-- **Dil / stack:** JavaScript (Node.js ≥ 20.11, ESM) + Fastify 5. Derleme adımı
-  yok, tek bağımlılık seti, `node src/index.js` ile çalışır.
-- **Kaynak:** [eSIM Go v2.5 OpenAPI dokümanı](https://docs.esim-go.com/api/v2_5/)
-  (`openapi/esim_go_schema_v2_5.yaml` olarak repoda), Notifications API ve
-  resmi guide sayfaları (rate limits, bundle status, suspend/unsuspend, eSIM
+- **Language / stack:** JavaScript (Node.js ≥ 20.11, ESM) + Fastify 5. No build
+  step, one dependency set, runs with `node src/index.js`.
+- **Source of truth:** the [eSIM Go v2.5 OpenAPI document](https://docs.esim-go.com/api/v2_5/)
+  (kept in the repo as `openapi/esim_go_schema_v2_5.yaml`), the Notifications API,
+  and the official guides (rate limits, bundle status, suspend/unsuspend, eSIM
   lifecycle, webhooks, QR delivery, balance, branding).
-- **Port:** varsayılan **4010** (`PORT` ile değiştirilir). 3000 bilinçli olarak
-  boş bırakıldı.
+- **Port:** **4010** by default (`PORT` overrides it). 3000 is deliberately left
+  free.
 
-## Hızlı başlangıç
+## Quick start
 
 ```bash
 npm install
 npm start                      # http://localhost:4010/v2.5
-npm test                       # 87 test, ağ/port gerekmez (fastify inject)
-./examples/quickstart.sh       # uçtan uca senaryo (sipariş → kurulum → tüketim)
+npm test                       # 87 tests, no network or port needed (fastify inject)
+./examples/quickstart.sh       # end-to-end scenario (order → install → usage)
 ```
 
 ```bash
 curl http://localhost:4010/v2.5/organisation -H 'X-API-Key: esimgo-mock-key'
 ```
 
-Kimlik doğrulama gerçeğiyle aynı: her istekte `X-API-Key` header'ı (header adı
-case-insensitive). Eksik/yanlış key → **403** `{"message":"Forbidden"}`.
-Varsayılan key `esimgo-mock-key`, `API_KEYS` ile değiştirilir.
+Authentication works the way the live API does: an `X-API-Key` header on every
+request (the header name is case insensitive). A missing or wrong key gives
+**403** `{"message":"Forbidden"}`. The default key is `esimgo-mock-key`, changed
+through `API_KEYS`.
 
-## Desteklenen endpoint'ler
+## Supported endpoints
 
-v2.5'teki **bütün** operasyonlar mevcut (deprecated olanlar dahil).
+**Every** v2.5 operation is implemented, deprecated ones included.
 
 ### eSIMs
-| Method | Path | Not |
+| Method | Path | Notes |
 |---|---|---|
 | GET | `/esims` | `page`, `perPage` (10/25/50/100), `orderBy=iccid`, `direction`, `filterBy`, `filter` |
-| PUT | `/esims` | `iccid` + `customerRef` (query ya da JSON body) |
-| POST | `/esims/apply` | Tek bundle + `iccid`, ya da `bundles[]` listesi; `repeat`, `allowReassign` |
-| GET | `/esims/assignments` | `reference`; `Accept` başlığına göre **JSON / CSV / ZIP(QR)**, `additionalFields=installUrl` |
-| GET | `/esims/{iccid}` | `additionalFields=installUrl` → Apple/Android tek-tık kurulum linkleri |
-| DELETE | `/esims/{iccid}` | eSIM'i deaktive eder |
-| GET | `/esims/{iccid}/history` | Dokümandaki lifecycle olayları, en yenisi başta |
-| GET | `/esims/{iccid}/refresh` | Profili cihaza yeniden push eder |
-| GET | `/esims/{iccid}/compatible/{bundle}` | Network profile eşleşmesi |
-| POST | `/esims/{iccid}/sms` | `message` (1–160, UTF-8), `from` (varsayılan `eSIM`) |
-| GET | `/esims/{iccid}/bundles` | `includeUsed`, `limit` (1–200, varsayılan 15) |
-| GET | `/esims/{iccid}/bundles/{name}` | Bundle'ın bütün assignment'ları |
+| PUT | `/esims` | `iccid` + `customerRef` (query string or JSON body) |
+| POST | `/esims/apply` | One bundle plus `iccid`, or a `bundles[]` list; `repeat`, `allowReassign` |
+| GET | `/esims/assignments` | `reference`; **JSON / CSV / ZIP(QR)** per the `Accept` header, `additionalFields=installUrl` |
+| GET | `/esims/{iccid}` | `additionalFields=installUrl` → Apple/Android one-tap install links |
+| DELETE | `/esims/{iccid}` | Deactivates the eSIM |
+| GET | `/esims/{iccid}/history` | The documented lifecycle events, newest first |
+| GET | `/esims/{iccid}/refresh` | Re-pushes the profile to the device |
+| GET | `/esims/{iccid}/compatible/{bundle}` | Network profile match |
+| POST | `/esims/{iccid}/sms` | `message` (1–160, UTF-8), `from` (defaults to `eSIM`) |
+| GET | `/esims/{iccid}/bundles` | `includeUsed`, `limit` (1–200, default 15) |
+| GET | `/esims/{iccid}/bundles/{name}` | Every assignment of that bundle |
 | DELETE | `/esims/{iccid}/bundles/{name}` | `type=validate\|transaction`, `refundToBalance`, `offerId` |
-| DELETE | `/esims/{iccid}/bundles/{name}/assignments/{assignmentId}` | Tek assignment revoke |
+| DELETE | `/esims/{iccid}/bundles/{name}/assignments/{assignmentId}` | Revoke a single assignment |
 | POST | `/esims/{iccid}/suspend` | `{"suspend":true\|false}` → **201** |
-| GET | `/esims/{iccid}/suspend` | Mevcut suspend durumu |
-| GET | `/esims/{iccid}/location` | Son görülen network/ülke |
+| GET | `/esims/{iccid}/suspend` | Current suspension state |
+| GET | `/esims/{iccid}/location` | Last seen network and country |
 
 ### Orders, Inventory, Organisation, Catalogue, Networks
-| Method | Path | Not |
+| Method | Path | Notes |
 |---|---|---|
 | GET | `/orders` | `includeIccids`, `page`, `limit`, `createdAt=lte:…\|gte:…` |
-| POST | `/orders` | `type=validate` fiyatlar, `type=transaction` bakiyeden düşer; `assign`, `profileID` |
-| GET | `/orders/{orderReference}` | eSIM detaylarıyla |
-| GET | `/inventory` | Bundle bazında batch'ler (`usageId`, `total`, `remaining`, `expiry`) |
-| POST | `/inventory/refund` | `usageId` + `quantity` → bakiyeye iade |
-| GET | `/organisation` | Bakiye, test credit, kullanıcılar, gruplar |
-| POST | `/organisation/balance` | `amount` (query ya da body) → kayıtlı karttan yükleme |
-| GET | `/organisation/groups` | Organizasyonun bundle grupları |
+| POST | `/orders` | `type=validate` prices it, `type=transaction` charges the balance; `assign`, `profileID` |
+| GET | `/orders/{orderReference}` | With eSIM details |
+| GET | `/inventory` | Batches per bundle (`usageId`, `total`, `remaining`, `expiry`) |
+| POST | `/inventory/refund` | `usageId` + `quantity` → credited to the balance |
+| GET | `/organisation` | Balance, test credit, users, groups |
+| POST | `/organisation/balance` | `amount` (query string or body) → charge the saved card |
+| GET | `/organisation/groups` | The organisation's bundle groups |
 | GET | `/catalogue` | `page`, `perPage`, `orderBy`, `direction`, `description`, `group`, `countries`, `region` |
-| GET | `/catalogue/bundle/{name}` | Tek bundle (isimler **case sensitive**) |
-| GET | `/catalogue/prices` | Consumption fiyat listesi + `hash` |
-| GET | `/networks` | `countries` (isim), `isos` (ISO2), `returnAll` |
+| GET | `/catalogue/bundle/{name}` | A single bundle (names are **case sensitive**) |
+| GET | `/catalogue/prices` | Consumption price list plus a content `hash` |
+| GET | `/networks` | `countries` (names), `isos` (ISO2), `returnAll` |
 
-### Deprecated (çalışır, yanıtta `Deprecation: true` header'ı ile)
+### Deprecated (still working, answered with a `Deprecation: true` header)
 | Method | Path |
 |---|---|
 | GET | `/esims/qr/{reference}` |
@@ -80,172 +81,176 @@ v2.5'teki **bütün** operasyonlar mevcut (deprecated olanlar dahil).
 | POST | `/esims/{iccid}/bundles` |
 | DELETE | `/esims/{iccid}/bundles/{name}/applications/{assignmentId}` |
 
-## Neleri gerçeğe uygun taklit ediyor
+## What it reproduces faithfully
 
-**Hata zarfı.** Her hata `{"message": "..."}`. Status kodları dokümandaki gibi:
-`400` validasyon, `403` key/IP/başka organizasyonun ICCID'si (asla 401),
-`404` route yok, `410` deaktive eSIM'in kurulum bilgisi, `429` rate limit,
-`503` injection ile.
+**Error envelope.** Every error is `{"message": "..."}`. Status codes follow the
+documentation: `400` validation, `403` bad key / non-whitelisted IP / an ICCID
+belonging to another organisation (never 401), `404` no such route, `410` install
+details for a deactivated eSIM, `429` rate limit, `503` through injection.
 
-**Rate limit.** IP başına fixed window, saniyede 10 istek. Her yanıtta
-`X-Ratelimit-Limit`, `X-Ratelimit-Remaining`, `X-Ratelimit-Reset`,
-`X-Ratelimit-Cost`; 429'da ek olarak `Retry-After`. Catalogue/networks gibi ağır
-endpoint'ler 5 token harcar.
+**Rate limits.** Fixed window per IP, 10 requests per second. Every response
+carries `X-Ratelimit-Limit`, `X-Ratelimit-Remaining`, `X-Ratelimit-Reset` and
+`X-Ratelimit-Cost`; a 429 adds `Retry-After`. Heavier endpoints such as catalogue
+and networks cost 5 tokens.
 
 **Bundle state machine.** `processing → queued → active → depleted | expired |
-revoked | lapsed`. Bir eSIM'de aynı anda tek aktif data bundle'ı olur; kalanlar
-kuyrukta bekler ve öndeki bitince otomatik devreye girer. Hiç başlamadan
-geçerliliği dolan bundle `lapsed` olur.
+revoked | lapsed`. An eSIM runs one active data bundle at a time; the rest wait in
+a queue and take over automatically when the one in front ends. A bundle whose
+validity runs out before it ever starts becomes `lapsed`.
 
-**Veri muhasebesi.** Base-10 byte: 1 GB = 1.000.000.000. `initialQuantity` /
-`remainingQuantity` byte, katalogdaki `dataAmount` MB. Unlimited bundle'lar
-sıfıra kadar sayar ama asla `depleted` olmaz (fair use).
+**Data accounting.** Base-10 bytes: 1 GB = 1,000,000,000. `initialQuantity` and
+`remainingQuantity` are bytes, while the catalogue's `dataAmount` is MB. Unlimited
+bundles count down to zero but never become `depleted` (fair use).
 
-**Sipariş kuralları.** ICCID sadece `assign: true` ile verilebilir, `quantity`
-ICCID sayısına eşit olmalı, `profileID` `assign: true` gerektirir, uyumsuz
-profil `allowReassign` olmadan reddedilir, `assign: false` stoğa yazar,
-yetersiz bakiye 400.
+**Order rules.** ICCIDs may only be given with `assign: true`, `quantity` has to
+match the number of ICCIDs, `profileID` requires `assign: true`, an incompatible
+profile is refused without `allowReassign`, `assign: false` writes to stock, and
+an insufficient balance is a 400.
 
-**Revoke/refund.** Hiç kullanılmamış bundle inventory'ye (veya
-`refundToBalance=true` ile bakiyeye) iade edilir; kullanılmışta iade yok.
-`type=validate` sadece ne olacağını anlatır, state'e dokunmaz.
+**Revoke and refund.** An untouched bundle goes back to inventory (or to the
+balance with `refundToBalance=true`); a used one is not refunded. `type=validate`
+only reports what would happen and leaves the state alone.
 
-**Suspend.** `partner` suspend'i API ile geri alınabilir; `policy` suspend'i
-alınamaz (`403`). Zaten suspend olan veya deaktive eSIM → `400`. Suspend
-bundle sürelerini durdurmaz.
+**Suspension.** A `partner` suspension can be lifted through the API; a `policy`
+one cannot (`403`). An already suspended or deactivated eSIM gives `400`.
+Suspending does not pause bundle timers.
 
-**eSIM lifecycle.** 180 gün hareketsizlik → `esim.deletion_scheduled`, 7 gün
-sonra deaktivasyon + `esim.deleted`. Arada bundle atanırsa silme iptal olur.
+**eSIM lifecycle.** 180 days of inactivity → `esim.deletion_scheduled`, then
+deactivation plus `esim.deleted` after 7 days. Applying a bundle in between
+cancels the deletion.
 
-**Kurulum teslimi.** `/esims/assignments` `Accept` başlığına göre ZIP (eSIM
-başına gerçek QR PNG'si + eşleme CSV'si), JSON veya CSV döner. QR içeriği
-gerçek LPA dizesi: `LPA:1$<smdp>$<matchingId>`.
+**Install delivery.** `/esims/assignments` returns a ZIP (a real QR PNG per eSIM
+plus the mapping CSV), JSON or CSV depending on the `Accept` header. The QR
+encodes a real LPA string: `LPA:1$<smdp>$<matchingId>`.
 
-**Katalog.** 80 ülke, 238 operatör ve ~1950 bundle deterministik üretilir:
-ülke/bölge/global, fixed + unlimited + Voice&SMS varyantları. Fiyatlar gerçek
-API ile tutarlı (örn. `esim_1GB_7D_GB_V2` = 2.28 USD). v2.5'te eklenen
-`countryNetworks` bloğu (TADIG, `mccMnc`, `speeds`, `potentialNetworks`) de var.
+**Catalogue.** 80 countries, 238 operators and roughly 1,950 bundles are generated
+deterministically: country, regional and global coverage, in fixed, unlimited and
+Voice & SMS variants. Prices line up with the live API (for example
+`esim_1GB_7D_GB_V2` = 2.28 USD). The `countryNetworks` block v2.5 added (TADIG,
+`mccMnc`, `speeds`, `potentialNetworks`) is there too.
 
-## Webhook'lar (callbacks)
+## Webhooks (callbacks)
 
-Notifications API'sindeki bütün tipler üretilir:
+Every type in the Notifications API is produced:
 
-`Utilisation` (%1/50/80/100), `FirstAttachment`, `FirstUse`, `CountryChange`,
+`Utilisation` (1/50/80/100%), `FirstAttachment`, `FirstUse`, `CountryChange`,
 `Topup`, `LowBalance` / `InsufficientBalance`, `esim.deletion_scheduled`,
 `esim.deleted`, `MSISDNEnabled`, `MSISDNDisabled`, `SMSFailed`.
 
-**V3** (varsayılan) ham gövdeyi API key ile HMAC-SHA256 imzalar ve
-`X-Signature-SHA256` header'ında gönderir; **V2** imzasızdır ve daha sade bir
-`bundle` nesnesi taşır.
+**V3** (the default) signs the raw body with HMAC-SHA256 using the API key and
+sends it in `X-Signature-SHA256`; **V2** is unsigned and carries a slimmer
+`bundle` object.
 
 ```bash
-# Örnek alıcıyı çalıştır (imzayı doğrular ve yazdırır)
+# Run the example receiver (it verifies the signature and prints the payload)
 node examples/callback-receiver.mjs            # :4000
 
-# Mock'u ona yönlendir
+# Point the mock at it
 curl -X POST localhost:4010/__mock/callbacks/config \
   -H 'Content-Type: application/json' \
   -d '{"url":"http://localhost:4000/callback","version":"V3"}'
 ```
 
-Callback URL tanımlı olmasa bile her deneme `/__mock/callbacks` günlüğüne
-yazılır — test yazarken alıcı ayağa kaldırmak zorunda değilsin.
+Every attempt is written to the `/__mock/callbacks` log even when no callback URL
+is configured, so tests never have to stand up a receiver.
 
 ## Control plane — `/__mock`
 
-Gerçek platformun kendi başına yaptığı şeyleri (kurulum, network'e bağlanma,
-veri tüketimi, zamanın akması) senkron tetiklemek için. API prefix'inin dışında
-ve kimlik doğrulama istemez.
+For triggering synchronously what the real platform does on its own: installs,
+network attachment, data consumption, the passage of time. It sits outside the API
+prefix and needs no authentication.
 
-| Method | Path | Ne yapar |
+| Method | Path | What it does |
 |---|---|---|
-| GET | `/__mock/health` | Liveness + sanal saat |
-| GET | `/__mock/state` | Sayaçlar ve organizasyon özeti |
-| GET | `/__mock/state/dump` | Bütün state (JSON) |
-| POST | `/__mock/reset` | `{"seed":true\|false}` — sıfırla |
-| GET/POST | `/__mock/clock` | `{"days":8}` / `{"reset":true}` — sanal saati ilerlet |
-| POST | `/__mock/tick` | Simülasyonu bir adım çalıştır (`consume`, `elapsedMs`) |
-| POST | `/__mock/esims` | Bundle'sız çıplak eSIM üret (`count`) |
-| POST | `/__mock/esims/{iccid}/install` | Profili "Installed" yap |
-| POST | `/__mock/esims/{iccid}/attach` | `{"iso":"FR"}` — network'e bağlan |
-| POST | `/__mock/esims/{iccid}/usage` | `{"mb":500}` / `{"bytes":…}` — veri harca |
-| POST | `/__mock/esims/{iccid}/policy-suspend` | API ile geri alınamayan suspend |
-| POST | `/__mock/esims/{iccid}/idle` | `{"days":181}` — hareketsizlik saatini geri al |
-| POST | `/__mock/inventory` | Sipariş vermeden stok ekle |
-| PATCH | `/__mock/organisation` | Bakiye, callback URL, threshold vb. |
-| GET/DELETE | `/__mock/callbacks` | Callback günlüğü (`?event=`, `?limit=`) |
-| POST | `/__mock/callbacks/config` | Callback URL + versiyon |
-| POST | `/__mock/callbacks/test` | Tek tip ya da bütün tipleri gönder |
-| GET | `/__mock/sms` | Gönderilen SMS'ler |
-| GET/POST/DELETE | `/__mock/failures` | Hata enjeksiyonu |
-| POST | `/__mock/persist` `/__mock/restore` | `STATE_PATH` ile snapshot |
-| GET | `/__mock/openapi.yaml` | Referans alınan v2.5 OpenAPI dokümanı |
+| GET | `/__mock/health` | Liveness plus the virtual clock |
+| GET | `/__mock/state` | Counters and an organisation summary |
+| GET | `/__mock/state/dump` | The full state as JSON |
+| POST | `/__mock/reset` | `{"seed":true\|false}` — start over |
+| GET/POST | `/__mock/clock` | `{"days":8}` / `{"reset":true}` — move the virtual clock |
+| POST | `/__mock/tick` | Run one simulation step (`consume`, `elapsedMs`) |
+| POST | `/__mock/esims` | Provision bare eSIMs with no bundle (`count`) |
+| POST | `/__mock/esims/{iccid}/install` | Mark the profile as Installed |
+| POST | `/__mock/esims/{iccid}/attach` | `{"iso":"FR"}` — register on a network |
+| POST | `/__mock/esims/{iccid}/usage` | `{"mb":500}` / `{"bytes":…}` — burn data |
+| POST | `/__mock/esims/{iccid}/policy-suspend` | A suspension the API cannot lift |
+| POST | `/__mock/esims/{iccid}/idle` | `{"days":181}` — backdate the activity clock |
+| POST | `/__mock/inventory` | Add stock without placing an order |
+| PATCH | `/__mock/organisation` | Balance, callback URL, thresholds and so on |
+| GET/DELETE | `/__mock/callbacks` | The callback log (`?event=`, `?limit=`) |
+| POST | `/__mock/callbacks/config` | Callback URL and version |
+| POST | `/__mock/callbacks/test` | Send one type, or all of them |
+| GET | `/__mock/sms` | Messages submitted through the API |
+| GET/POST/DELETE | `/__mock/failures` | Failure injection |
+| POST | `/__mock/persist` `/__mock/restore` | Snapshots, with `STATE_PATH` |
+| GET | `/__mock/openapi.yaml` | The v2.5 OpenAPI document this mock follows |
 
-**Hata enjeksiyonu** — retry/backoff kodunu test etmek için:
+**Failure injection** — for exercising retry and backoff code:
 
 ```bash
 curl -X POST localhost:4010/__mock/failures -H 'Content-Type: application/json' \
   -d '{"path":"/orders","method":"POST","status":503,"message":"Processing","count":2,"delayMs":250}'
 ```
 
-`path` alt yollarla da eşleşir (`/esims` → `/esims/{iccid}/bundles`), `*` her
-şeyi yakalar, `count` verilmezse kural kalıcıdır.
+`path` also matches sub-paths (`/esims` covers `/esims/{iccid}/bundles`), `*`
+catches everything, and a rule without `count` stays armed forever.
 
-## Yapılandırma
+## Configuration
 
-Tüm ayarlar environment değişkeni; tam liste `.env.example` dosyasında. Sık
-kullanılanlar:
+Everything is an environment variable; the full list is in `.env.example`. The
+ones you will reach for:
 
-| Değişken | Varsayılan | Açıklama |
+| Variable | Default | Description |
 |---|---|---|
-| `PORT` | `4010` | HTTP portu |
-| `BASE_PATH` | `/v2.5` | API prefix'i |
-| `API_KEYS` | `esimgo-mock-key` | Virgülle ayrılmış geçerli key'ler |
-| `IP_WHITELIST` | boş | Doluysa sadece bu IP'ler (403 aksi halde) |
-| `RATE_LIMIT_ENABLED` / `RATE_LIMIT` | `true` / `10` | Saniyedeki istek sayısı |
-| `CALLBACK_URL` / `CALLBACK_VERSION` | boş / `V3` | Webhook hedefi ve sürümü |
-| `SIM_AUTO_USAGE` / `SIM_BYTES_PER_SECOND` | `true` / `250000` | Otomatik veri tüketimi |
-| `SIM_AUTO_INSTALL_AFTER_MS` | `10000` | eSIM'i otomatik kur + bağla (0 = kapalı) |
-| `SIM_PROCESSING_MS` | `3000` | `processing` state'inde kalma süresi |
-| `SEED_ESIMS` / `SEED_INVENTORY` | `3` / `true` | Açılışta demo veri |
-| `STATE_PATH` | boş | Doluysa kapanışta state'i diske yazar |
+| `PORT` | `4010` | HTTP port |
+| `BASE_PATH` | `/v2.5` | API prefix |
+| `API_KEYS` | `esimgo-mock-key` | Comma separated list of valid keys |
+| `IP_WHITELIST` | empty | When set, only these IPs (403 otherwise) |
+| `RATE_LIMIT_ENABLED` / `RATE_LIMIT` | `true` / `10` | Requests per second |
+| `CALLBACK_URL` / `CALLBACK_VERSION` | empty / `V3` | Webhook target and version |
+| `SIM_AUTO_USAGE` / `SIM_BYTES_PER_SECOND` | `true` / `250000` | Automatic data consumption |
+| `SIM_AUTO_INSTALL_AFTER_MS` | `10000` | Auto install + attach an eSIM (0 = off) |
+| `SIM_PROCESSING_MS` | `3000` | Time spent in the `processing` state |
+| `SEED_ESIMS` / `SEED_INVENTORY` | `3` / `true` | Demo data created on boot |
+| `STATE_PATH` | empty | When set, the state is written to disk on shutdown |
 
-Testler için pratik profil: `RATE_LIMIT_ENABLED=false SIM_PROCESSING_MS=0
+A handy profile for test suites: `RATE_LIMIT_ENABLED=false SIM_PROCESSING_MS=0
 SIM_AUTO_USAGE=false SEED_ESIMS=0`.
 
-## Proje yapısı
+## Project layout
 
 ```
 src/
-  index.js            giriş noktası: state restore/seed, engine, listen
-  server.js           Fastify kurulumu, hata zarfı, route kayıtları
-  config.js           environment tabanlı yapılandırma
-  routes/             HTTP katmanı (esims, bundles, orders, inventory,
+  index.js            entry point: state restore/seed, engine, listen
+  server.js           Fastify setup, error envelope, route registration
+  config.js           environment driven configuration
+  routes/             HTTP layer (esims, bundles, orders, inventory,
                       catalogue, networks, organisation, deprecated, mock)
-  domain/             iş kuralları (esims, bundles, orders, inventory,
+  domain/             business rules (esims, bundles, orders, inventory,
                       catalogue, networks, organisation)
-  store/              in-memory state, snapshot/restore, seed verisi
-  data/               ülke + operatör referans verisi, katalog üreteci
-  callbacks/          webhook gönderimi ve HMAC imzalama
-  sim/                arka plan simülasyon motoru
-  util/               hata, zaman (sanal saat), id/ICCID, CSV, ZIP, QR, validasyon
-  plugins/            auth, rate limit, hata enjeksiyonu
-tests/                87 test (node:test + fastify inject)
+  store/              in-memory state, snapshot/restore, seed data
+  data/               country + operator reference data, catalogue generator
+  callbacks/          webhook delivery and HMAC signing
+  sim/                background simulation engine
+  util/               errors, time (virtual clock), ids/ICCID, CSV, ZIP, QR, validation
+  plugins/            auth, rate limiting, failure injection
+tests/                87 tests (node:test + fastify inject)
 examples/             quickstart.sh, callback-receiver.mjs
-openapi/              referans alınan eSIM Go v2.5 OpenAPI dokümanı
+openapi/              the eSIM Go v2.5 OpenAPI document this mock follows
 ```
 
-Kod tamamen JSDoc'lu: her export edilen fonksiyonun `@param`/`@returns`
-bloğu var, gerçek API davranışından sapan ya da onu birebir taklit eden yerler
-yorumlarda açıklanıyor.
+The code is fully JSDoc'd: every exported function has a `@param`/`@returns`
+block, and the comments call out both the places that mirror the live API exactly
+and the places that deliberately differ.
 
-## Mock olduğu için farklı olan şeyler
+## Where it differs, because it is a mock
 
-- ICCID'ler sıralı ve Luhn-geçerli (`8943108100000000010`…); matching ID ve
-  SM-DP+ adresi sahte (`rsp.esim-go-mock.local`), gerçek bir cihaza kurulmaz.
-- Katalog deterministik üretilir; gerçek eSIM Go kataloğunun birebir kopyası
-  değil ama isim/format/fiyat düzeni aynı.
-- `/esims/assignments` JSON'da tek eSIM varsa nesne, çoksa dizi döner
-  (dokümandaki örnek tek nesne, gerçek hayatta çoklu sipariş olabiliyor).
-- State bellekte; `STATE_PATH` verilmezse yeniden başlatmada sıfırlanır.
-- `/__mock` yüzeyi gerçek API'de yoktur.
+- ICCIDs are sequential and Luhn-valid (`8943108100000000010`…); the matching ID
+  and SM-DP+ address are fake (`rsp.esim-go-mock.local`) and will not install on a
+  real device.
+- The catalogue is generated deterministically. It is not a copy of the real eSIM
+  Go catalogue, but the naming, shape and price structure match.
+- `/esims/assignments` returns an object for a single eSIM and an array for
+  several (the documented example is a single object, while real orders can cover
+  many eSIMs).
+- State lives in memory; without `STATE_PATH` it resets on restart.
+- The `/__mock` surface does not exist in the real API.
